@@ -2,6 +2,7 @@
 require 'simple_html_dom.php';
 require 'sql.php';
 
+#TODO что бы найти  новый товар которого нету в базе, то нужно сделать так как сейчас пройдемся по всем ссылкам на сайте но  не добавляя категории а переходим в карточки товара и делаем поиск по артиклу и если его нет то выводим ссылку на товар
 
 //по курлу получаем  страницу нужную для парса 
 function curl_get($url = "", $referer = 'http://www.google.com') {
@@ -22,15 +23,23 @@ function curl_get($url = "", $referer = 'http://www.google.com') {
 
 //вызываем функцию и передаем url для парсинга
 getParentsCategoryBikeland('https://bikeland.ru');
-
+ 
 //получаем родительские категории
 function getParentsCategoryBikeland($url){
   $html = str_get_html(curl_get($url));
  
   if($html->innertext!='' and count($html->find('.catalogfirst a.icons_fa'))){
     foreach($html->find('.catalogfirst a.icons_fa') as $a){
-        //getDaughterCategoryBikeland($a->plaintext, $url.$a->href);
-        setParentsCategoryBikeland($a->plaintext, $url.$a->href);
+    	$parents_id = setCategoryInfoBikeland($a->plaintext);
+
+    	//делаем проверку создалась ли категория, если да то присваиваем ее ид дочерним
+    	if(!empty($parents_id)){
+    		 getDaughterCategoryBikeland($parents_id, $url.$a->href);
+    	}else{
+    		break;
+    	}
+        
+        
     }
   }
 
@@ -39,27 +48,27 @@ function getParentsCategoryBikeland($url){
   unset($html);
 }
 
-//добавляем родительские категории в базу и вносим инфу в кэш о дочерних категориях
-function setParentsCategoryBikeland($name, $url){
+//создаем категории в базе, если передан параметр(parent_id то это дочерняя и заносим тогда ее в кэш)
+function setCategoryInfoBikeland($name,$parent_id = false, $url = false){
   #TODO тут сделать 2 инсерта. Первый создает категорию и возвращает ее ид, а второй инсерт берет этот ид и заносит в кэш кетегори все делать по условию главное получить id категории. Еще тут надо будет разобраться с задвоением категорий, что бы при клике загрузить или обновить не задваивало категории а юзало теже самые только ид тянуло. Или же можно так  сделать на каждую сохраненную ссылку (кэш категории) сохранять .html а имя использовать ид строки кэша (защита от дублей) и тогда делаем с помощью форича пробег и вытягиваем ид строки а дальше по этому ид тянем файл по которому будем парсить, когда с файлом разобрались удаляем файл по имени и запись в базе по id но тут восстает другая проблема это пагинация в товаре + сам товар (карточка товара)
 
   //делаем проверку, что бы категория была с именем
   if(!empty($name)){
 
     $category_group_id = 1;
-    $parent_id = 1;
+    $parent_id = (!empty($parent_id)) ? $parent_id : 1;
     $name = htmlentities($name);
     $nonDataStr = "";
     $nonDataInt = 0;
     $date_time = date("Y-m-d H:i:s");
     $slug = generate_chpu($name);
     $active = 1;
-
+ 
     /*Заносим введеные данные в базу*/
-    $model = new Model();
-    $setCategory = $model->connect()->prepare("INSERT INTO category 
+    $setCategory = DB::prepare("INSERT INTO category 
                             (category_group_id, parent_id,name,title,h1,meta_description,breadcrumbs_label,slug,slug_compiled,slug_absolute,content,announce,sort_order,title_append,active,date_added,date_modified) 
                               VALUES (:category_group_id, :parent_id, :name, :title, :h1, :meta_description, :breadcrumbs_label, :slug, :slug_compiled, :slug_absolute, :content, :announce, :sort_order, :title_append, :active, :date_added, :date_modified)");
+
       $setCategory->bindParam(':category_group_id', $category_group_id);
       $setCategory->bindParam(':parent_id', $parent_id);
       $setCategory->bindParam(':name',$name);
@@ -77,40 +86,58 @@ function setParentsCategoryBikeland($name, $url){
       $setCategory->bindParam(':active', $active);
       $setCategory->bindParam(':date_added', $date_time);
       $setCategory->bindParam(':date_modified', $date_time);
+ 	  $setCategory->execute();
+      
+      //возвращаем id добавленной категории
+      $lastID = DB::lastInsertId();
 
-      #TODO тут надо будет разобраться почему не выводит последний добавленный ид
-      $s = $model->connect()->lastInsertId();
-      $setCategory->execute();
+      //проверяем, если ид передан значит это дочерняя категория и ее заносим в базу
+      if(!empty($parent_id)){
 
-   
-   var_dump($s);
+      	//делаем проверку, получаем ли ссылку на дочернюю категорию, если все гуд то создаем кэш по дочерним категориям
+      	if(!empty($url)){
+      		$setCacheCategory = DB::prepare("INSERT INTO cache_category 
+                            (parent_id,url) VALUES (:parent_id, :url)");
+
+		    $setCacheCategory->bindParam(':parent_id', $lastID);
+		    $setCacheCategory->bindParam(':url', $url);
+  			$setCacheCategory->execute();
+      	}
+
+	  } 
+
+
   }
+ 
+   return (!empty($lastID)) ? $lastID : false;
+  }
+  
+ 
 
-}
+//получаем id родителя и ссылку для перехода в родителя, что бы спарсить дочерние категории
+function getDaughterCategoryBikeland($id, $url){
 
-//получаем дочерние категории и заносим в базу категории (все)
-function getDaughterCategoryBikeland($name, $url){
+#TODO  в родительской категории идут дочерние и товары. Эти товары относяться к дочерним, то есть в родительской парсим дочерние категории, а после переходим в категорию и если там нету категорий то парсим товар и этот товар заносим в базу под категорию дочернюю и под родительскую. Делаем проверку если нету категорий и есть  список товара то сохраняем файл и парсим его (переходим по ссылкам в карточку товара и парсим все данные с карточки товара) и так доходим до конца списка по товарам, а дальше проверяем есть ли пагинация если есть то берем ссылку и переходим (старую страницу удаляем, а новую создаем). И так далее все парсим.
 
   $html = str_get_html(curl_get($url));
+  $home = 'https://bikeland.ru';
 
+  	//проверяем, что бы родительская категория была создана
+ 	if(!empty($id)){
+
+        if($html->innertext!='' and count($html->find('.catalog_section_list .section_info li.name a'))){
+	    foreach($html->find('.catalog_section_list .section_info li.name a') as $a){
+	        setCategoryInfoBikeland($a->plaintext, $id, $home.$a->href);
+	    }
+	  }
+
+	  //подчищаем за собой
+	  $html->clear();
+	  unset($html);
+   	}
+}
 
  
-  if($html->innertext!='' and count($html->find('.catalogfirst a.icons_fa'))){
-    foreach($html->find('.catalogfirst a.icons_fa') as $a){
-        getDaughterCategoryBikeland($a->plaintext, $url.$a->href);
-    }
-  }
-
-  //подчищаем за собой
-  $html->clear();
-  unset($html);
-   
-}
-
-//заносим всю инфу для создания категории
-function setCategoryInfoBikeland(){
-
-}
 
 //генерирует ЧПУ
 function generate_chpu ($str)
