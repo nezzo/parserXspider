@@ -2,7 +2,7 @@
 require 'simple_html_dom.php';
 require 'sql.php';
 
-#TODO что бы найти  новый товар которого нету в базе, то нужно сделать так как сейчас пройдемся по всем ссылкам на сайте но  не добавляя категории а переходим в карточки товара и делаем поиск по артиклу и если его нет то выводим ссылку на товар
+#TODO что бы найти  новый товар которого нету в базе, то нужно сделать так как сейчас пройдемся по всем ссылкам на сайте но  не добавляя категории а переходим в карточки товара и делаем поиск по артиклу и если его нет то выводим ссылку на товар (способ не очень из-за того что артикул в разных местах с разными тегами, лучше делать поиск по  имени товара)
 
 //по курлу получаем  страницу нужную для парса 
 function curl_get($url = "", $referer = 'http://www.google.com') {
@@ -20,9 +20,97 @@ function curl_get($url = "", $referer = 'http://www.google.com') {
 
 #TODO htmlentities надо заюзать в именах категорий и товара, что бы не было ошибок sql
 
+ 
+//запуск парсинга
+//start();
+ 
 
+//функция которая будет запускать скрипты в работу
+function start(){
 //вызываем функцию и передаем url для парсинга
-getParentsCategoryBikeland('https://bikeland.ru');
+//getParentsCategoryBikeland('https://bikeland.ru');
+
+
+
+#TODO эту функцию надо перенести в getParentsCategoryBikeland в самый конец или в условие если удачно занеслись дочерние категории то в конце вызвать эту функцию по работе с дочерними категориями	
+
+//получаем ид родителя и ссылку на дочернюю категорию для парсинга пагинации товара	
+getDaughterCategoryBikeland();
+}
+
+//получаем ид родителя и ссылку на дочерние категории
+function getDaughterCategoryBikeland(){
+
+	//с базы получаем данные id родительской категории и ссылку на дочерню категорию
+	$stmt = 'SELECT parent_id,url FROM cache_category';
+
+	$stmt = DB::run($stmt);
+
+	foreach($stmt as $data){
+		//заносим в переменную инфу о том есть ли дочерние категории в текущей категории
+		$dauth = setDaughterCategoryBikeland($data['parent_id'], $data['url']);
+
+ 		//если в дочерний категории не нашли дочерних категорий то парсим пагинацию
+		if($dauth == false){
+ 			//добавляем ссылки в базу пагинации
+			setPaginationUrl($data['parent_id'],$data['url']);
+ 		} 
+    }
+
+    #TODO тут надо будет заюзать еще один цикл почти такой же как сверху только ид родительской категории должен вытягивать с базы все ссылки на пагинации (по ид) и дальше делать переход по ссылки на товар (парсер) сохранять html код и заносить этот код в базу в таблицу cache_product ну и ид родиельской категории, когда дойдем конца списка пагинации по ид то удаляем с базы по ид категории все ссылки на пагинацию данной категории
+
+
+    #TODO надо както придумать что бы ид категории родителя и ид категории дочерний был в 1 товар и это надо занести в базу, что бы товар отображался в двух категориях
+ 
+ }
+
+//в базу заносим ссылки на список товара категории (ссылки пагинации)
+function setPaginationUrl($id,$url){
+
+  	//делаем проверку данных, что бы не были пустыми
+	if(!empty($id) && !empty($url)){
+		$html = str_get_html(curl_get($url));
+		$home = "https://bikeland.ru";
+		$n = $html->find('.flex-nav-next  a');
+		$prev = $html->find('.flex-nav-prev  a');
+		$next = $home.$n[0]->href;
+
+		
+		//начиная с первой страницы заносим ее в базу
+		if(empty($prev)){
+			/*Заносим введеные данные в базу*/
+			$setPagination = DB::prepare("INSERT INTO cache_pagination 
+	                            (category_id, url) 
+	                              VALUES (:category_id, :url)");
+		 	$setPagination->bindParam(':category_id', $id);
+		    $setPagination->bindParam(':url', $url);
+		    $setPagination->execute();
+
+		    
+		}
+
+		//если находим ссылку в пагинации на слудющую страницу то заносим ее в базу
+		if(!empty($n)){
+
+			/*Заносим введеные данные в базу*/
+				$setPagination = DB::prepare("INSERT INTO cache_pagination 
+		                            (category_id, url) 
+		                              VALUES (:category_id, :url)");
+			 	$setPagination->bindParam(':category_id', $id);
+			    $setPagination->bindParam(':url', $next);
+			    $setPagination->execute();
+
+			//и так делаем в рекурсии пока есть ссылки в пагинации next    
+  			setPaginationUrl($id,$next);
+ 		}else{
+
+			return true;
+		}
+    }
+}
+
+
+
  
 //получаем родительские категории
 function getParentsCategoryBikeland($url){
@@ -50,8 +138,7 @@ function getParentsCategoryBikeland($url){
 
 //создаем категории в базе, если передан параметр(parent_id то это дочерняя и заносим тогда ее в кэш)
 function setCategoryInfoBikeland($name,$parent_id = false, $url = false){
-  #TODO тут сделать 2 инсерта. Первый создает категорию и возвращает ее ид, а второй инсерт берет этот ид и заносит в кэш кетегори все делать по условию главное получить id категории. Еще тут надо будет разобраться с задвоением категорий, что бы при клике загрузить или обновить не задваивало категории а юзало теже самые только ид тянуло. Или же можно так  сделать на каждую сохраненную ссылку (кэш категории) сохранять .html а имя использовать ид строки кэша (защита от дублей) и тогда делаем с помощью форича пробег и вытягиваем ид строки а дальше по этому ид тянем файл по которому будем парсить, когда с файлом разобрались удаляем файл по имени и запись в базе по id но тут восстает другая проблема это пагинация в товаре + сам товар (карточка товара)
-
+ 
   //делаем проверку, что бы категория была с именем
   if(!empty($name)){
 
@@ -75,7 +162,7 @@ function setCategoryInfoBikeland($name,$parent_id = false, $url = false){
       $setCategory->bindParam(':title', $name);
       $setCategory->bindParam(':h1', $name);
       $setCategory->bindParam(':meta_description', $nonDataStr);
-      $setCategory->bindParam(':breadcrumbs_label', $nonDataStr);
+      $setCategory->bindParam(':breadcrumbs_label', $name);
       $setCategory->bindParam(':slug', $slug);
       $setCategory->bindParam(':slug_compiled', $nonDataStr);
       $setCategory->bindParam(':slug_absolute', $nonDataInt);
@@ -114,27 +201,35 @@ function setCategoryInfoBikeland($name,$parent_id = false, $url = false){
   
  
 
-//получаем id родителя и ссылку для перехода в родителя, что бы спарсить дочерние категории
-function getDaughterCategoryBikeland($id, $url){
+//заносим в базу дочерние категории
+function setDaughterCategoryBikeland($id, $url){
 
-#TODO  в родительской категории идут дочерние и товары. Эти товары относяться к дочерним, то есть в родительской парсим дочерние категории, а после переходим в категорию и если там нету категорий то парсим товар и этот товар заносим в базу под категорию дочернюю и под родительскую. Делаем проверку если нету категорий и есть  список товара то сохраняем файл и парсим его (переходим по ссылкам в карточку товара и парсим все данные с карточки товара) и так доходим до конца списка по товарам, а дальше проверяем есть ли пагинация если есть то берем ссылку и переходим (старую страницу удаляем, а новую создаем). И так далее все парсим.
-
+#TODO  в родительской категории идут дочерние и товары. Тогда берем ид дочерний категории и начинаем парсить товар по этому id дочерней категории. При переходе на страницу с товаром то сохраняем html код в таблице cache_product где будет стоять рядом ид родителя категории и ид дочерней категории. Все действия делаем по ид дочерней категории. То есть делаем выборку по ид дочерней категории (товар) и парсим по html c таблице и так до конца списка выборки. Дальше делаем удаление по ид дочерней категории (товар, пагинацию и саму ссылку с cache_category).   
+  
+ 
   $html = str_get_html(curl_get($url));
   $home = 'https://bikeland.ru';
 
   	//проверяем, что бы родительская категория была создана
  	if(!empty($id)){
 
+ 		//проверяем существует ли дочерние категории на странице, если нет то сохраняем html файл для парса
         if($html->innertext!='' and count($html->find('.catalog_section_list .section_info li.name a'))){
-	    foreach($html->find('.catalog_section_list .section_info li.name a') as $a){
-	        setCategoryInfoBikeland($a->plaintext, $id, $home.$a->href);
-	    }
-	  }
+		    foreach($html->find('.catalog_section_list .section_info li.name a') as $a){
+		        setCategoryInfoBikeland($a->plaintext, $id, $home.$a->href);
+		    }
 
-	  //подчищаем за собой
-	  $html->clear();
-	  unset($html);
-   	}
+	      	//подчищаем за собой
+		  	$html->clear();
+		  	unset($html);
+ 		}else{
+ 			return false;
+ 		}
+
+	  
+   	}else{
+ 		return false;
+ 	}
 }
 
  
