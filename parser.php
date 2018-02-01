@@ -126,55 +126,168 @@ class Parser{
 
  		if(!empty($data)){
  			foreach($data as $dat){
- 				$setPagination = DB::prepare("INSERT INTO cache_products 
+ 				$setCacheHtml = DB::prepare("INSERT INTO cache_products 
 	                            (parent_id,category_id, name, html) 
 	                              VALUES (:parent_id, :category_id, :name, :html)");
-			 	$setPagination->bindParam(':parent_id', $dat['parent_id']);
-			 	$setPagination->bindParam(':category_id', $dat['category_id']);
-			    $setPagination->bindParam(':name', $dat['name']);
-			    $setPagination->bindParam(':html', $dat['html']);
-			    $setPagination->execute();
+			 	$setCacheHtml->bindParam(':parent_id', $dat['parent_id']);
+			 	$setCacheHtml->bindParam(':category_id', $dat['category_id']);
+			    $setCacheHtml->bindParam(':name', $dat['name']);
+			    $setCacheHtml->bindParam(':html', $dat['html']);
+			    $setCacheHtml->execute();
  			}
  		}
 
  		return true;
  			
  	}
-				
+
+ 	//функция по созданию продукта в базе
+ 	public function createProduct($mas){
+
+ 		if(!empty($mas)){
+ 			$parent_id = 0;
+ 			$zero = 0;
+ 			$empt = "";
+ 			$active = 1;
+ 			$one = 1;
+ 			$option_generate = "";
+
+ 			foreach($mas as $data){
+ 				$category_id = (!empty($data['category_id'])) ? $data['category_id'] : 1;
+ 				$parent_category_id = (!empty($data['parent_category_id'])) ? $data['parent_category_id'] : "";
+ 				$name = (!empty($data['name'])) ? htmlentities($data['name']) : "";
+ 				$desc = (!empty($data['desc'])) ? $data['desc'] : "";
+ 				$charact = (!empty($data['charact'])) ? $data['charact'] : "";
+ 				$price = (!empty($data['price'])) ? $data['price'] : 0;
+ 				$date_time = date("Y-m-d H:i:s");
+ 				$sku = (!empty($data['sku'])) ? $data['sku'] : "";
+ 				$images = (!empty($data['image'])) ? $data['image'] : "";
+ 				$slug = $this->generate_chpu($name);
+ 
+ 				//заносим данные в таблицу product
+ 				$setCreateProduct = DB::prepare("INSERT INTO product 
+ 					(main_category_id,parent_id,option_generate,name,title,h1,meta_description,breadcrumbs_label,slug,slug_compiled,slug_absolute,content,announce,sort_order,active,price,old_price,sku,unlimited_count,currency_id,measure_id,date_added,date_modified) 
+
+			                              VALUES (:main_category_id,:parent_id,:option_generate, :name,:title, :h1,:meta_description,:breadcrumbs_label,:slug, :slug_compiled, :slug_absolute,:content,:announce,:sort_order, :active,:price,:old_price,:sku,:unlimited_count,:currency_id,:measure_id,:date_added,:date_modified)");
+				$setCreateProduct->bindParam(':main_category_id', $category_id);
+				$setCreateProduct->bindParam(':parent_id', $parent_id);
+				$setCreateProduct->bindParam(':option_generate', $option_generate);
+				$setCreateProduct->bindParam(':name', $name);
+				$setCreateProduct->bindParam(':h1', $name);
+ 				$setCreateProduct->bindParam(':title', $name);
+				$setCreateProduct->bindParam(':meta_description', $name);
+				$setCreateProduct->bindParam(':breadcrumbs_label', $name);
+				$setCreateProduct->bindParam(':slug', $slug);
+				$setCreateProduct->bindParam(':slug_compiled', $empt);
+				$setCreateProduct->bindParam(':slug_absolute', $zero);
+				$setCreateProduct->bindParam(':content', $charact);
+				$setCreateProduct->bindParam(':announce', $desc);
+				$setCreateProduct->bindParam(':sort_order', $zero);
+				$setCreateProduct->bindParam(':active', $active);
+				$setCreateProduct->bindParam(':price', $price);
+				$setCreateProduct->bindParam(':old_price', $zero);
+				$setCreateProduct->bindParam(':sku', $sku);
+				$setCreateProduct->bindParam(':unlimited_count', $one);
+				$setCreateProduct->bindParam(':currency_id', $one);
+				$setCreateProduct->bindParam(':measure_id', $one);
+				$setCreateProduct->bindParam(':date_added', $date_time);
+				$setCreateProduct->bindParam(':date_modified', $date_time);
+ 				$setCreateProduct->execute();
+
+				//возвращаем id добавленого товара
+		      	$lastID = DB::lastInsertId();
+
+
+		      	//если товар на сайте добавлен в родительскую категорию то и значит добавляем так же
+		      	if(!empty($parent_category_id)){
+		      		$setParentCategory = DB::prepare("INSERT INTO product_category 
+	                            (category_id,object_model_id,sort_order) 
+	                              VALUES (:category_id, :object_model_id, :sort_order)");
+				 	$setParentCategory->bindParam(':category_id', $parent_category_id);
+				 	$setParentCategory->bindParam(':object_model_id', $lastID);
+				    $setParentCategory->bindParam(':sort_order', $zero);
+ 				    $setParentCategory->execute();
+		      	}
+
+		      		$setParentCategory1 = DB::prepare("INSERT INTO product_category 
+	                            (category_id,object_model_id,sort_order) 
+	                              VALUES (:category_id, :object_model_id, :sort_order)");
+				 	$setParentCategory1->bindParam(':category_id', $category_id);
+				 	$setParentCategory1->bindParam(':object_model_id', $lastID);
+				    $setParentCategory1->bindParam(':sort_order', $zero);
+ 				    $setParentCategory1->execute();
+
+ 
+ 				    //если есть данные о картинках в товаре то заносим эту инфу в базу
+ 				    if(!empty($images)){
+			 			$object_id = 1; #TODO надо будет узнать, что это поле означает
+			 			foreach($images as $image){
+ 			 				$filename = $this->setImageName("https://bikeland.ru",$image->href);
+ 							
+ 							$setImage = DB::prepare("INSERT INTO image 
+				                            (object_id,object_model_id,filename,image_title,sort_order,image_alt) 
+				                              VALUES (:object_id, :object_model_id,:filename,:image_title, :sort_order,:image_alt)");
+							$setImage->bindParam(':object_id', $object_id);
+							$setImage->bindParam(':object_model_id', $lastID);
+							$setImage->bindParam(':filename', $filename);
+							$setImage->bindParam(':image_title', $filename);
+							$setImage->bindParam(':sort_order', $zero);
+							$setImage->bindParam(':image_alt', $filename);
+			 				$setImage->execute();	
+		 				}
+ 					}
+ 				}
+ 			}
+ 		}
+
 				
 
 	//генерирует ЧПУ
 	public function generate_chpu($str){
-	    $converter = array(
-	          'а' => 'a',   'б' => 'b',   'в' => 'v',
-	          'г' => 'g',   'д' => 'd',   'е' => 'e',
-	          'ё' => 'e',   'ж' => 'zh',  'з' => 'z',
-	          'и' => 'i',   'й' => 'y',   'к' => 'k',
-	          'л' => 'l',   'м' => 'm',   'н' => 'n',
-	          'о' => 'o',   'п' => 'p',   'р' => 'r',
-	          'с' => 's',   'т' => 't',   'у' => 'u',
-	          'ф' => 'f',   'х' => 'h',   'ц' => 'c',
-	          'ч' => 'ch',  'ш' => 'sh',  'щ' => 'sch',
-	          'ь' => '',    'ы' => 'y',   'ъ' => '',
-	          'э' => 'e',   'ю' => 'yu',  'я' => 'ya',
-	 
-	          'А' => 'A',   'Б' => 'B',   'В' => 'V',
-	          'Г' => 'G',   'Д' => 'D',   'Е' => 'E',
-	          'Ё' => 'E',   'Ж' => 'Zh',  'З' => 'Z',
-	          'И' => 'I',   'Й' => 'Y',   'К' => 'K',
-	          'Л' => 'L',   'М' => 'M',   'Н' => 'N',
-	          'О' => 'O',   'П' => 'P',   'Р' => 'R',
-	          'С' => 'S',   'Т' => 'T',   'У' => 'U',
-	          'Ф' => 'F',   'Х' => 'H',   'Ц' => 'C',
-	          'Ч' => 'Ch',  'Ш' => 'Sh',  'Щ' => 'Sch',
-	          'Ь' => '',    'Ы' => 'Y',   'Ъ' => '',
-	          'Э' => 'E',   'Ю' => 'Yu',  'Я' => 'Ya',
-	    );
-	    $str = strtr($str, $converter);
-	    $str = strtolower($str);
-	    $str = preg_replace('~[^-a-z0-9_]+~u', '-', $str);
-	    $str = trim($str, "-");
-	    return $str;
+		if(!empty($str)){
+ 			$converter = array(
+		          'а' => 'a',   'б' => 'b',   'в' => 'v',
+		          'г' => 'g',   'д' => 'd',   'е' => 'e',
+		          'ё' => 'e',   'ж' => 'zh',  'з' => 'z',
+		          'и' => 'i',   'й' => 'y',   'к' => 'k',
+		          'л' => 'l',   'м' => 'm',   'н' => 'n',
+		          'о' => 'o',   'п' => 'p',   'р' => 'r',
+		          'с' => 's',   'т' => 't',   'у' => 'u',
+		          'ф' => 'f',   'х' => 'h',   'ц' => 'c',
+		          'ч' => 'ch',  'ш' => 'sh',  'щ' => 'sch',
+		          'ь' => '',    'ы' => 'y',   'ъ' => '',
+		          'э' => 'e',   'ю' => 'yu',  'я' => 'ya',
+		 
+		          'А' => 'A',   'Б' => 'B',   'В' => 'V',
+		          'Г' => 'G',   'Д' => 'D',   'Е' => 'E',
+		          'Ё' => 'E',   'Ж' => 'Zh',  'З' => 'Z',
+		          'И' => 'I',   'Й' => 'Y',   'К' => 'K',
+		          'Л' => 'L',   'М' => 'M',   'Н' => 'N',
+		          'О' => 'O',   'П' => 'P',   'Р' => 'R',
+		          'С' => 'S',   'Т' => 'T',   'У' => 'U',
+		          'Ф' => 'F',   'Х' => 'H',   'Ц' => 'C',
+		          'Ч' => 'Ch',  'Ш' => 'Sh',  'Щ' => 'Sch',
+		          'Ь' => '',    'Ы' => 'Y',   'Ъ' => '',
+		          'Э' => 'E',   'Ю' => 'Yu',  'Я' => 'Ya',
+		    );
+		    $str = strtr($str, $converter);
+		    $str = strtolower($str);
+		    $str = preg_replace('~[^-a-z0-9_]+~u', '-', $str);
+		    $str = trim($str, "-");
+		    return $str;
+	    }
+
+    }
+
+    //передаем ссылки и получаем взамен имя картинки и ее расширение
+    public function setImageName($home="",$url){
+
+    	if(!empty($url)){
+    		$path_parts = pathinfo($home.$url);
+  	  		return htmlentities($path_parts['filename']).".".$path_parts['extension'];
+    	}else{
+    		return false;
+    	}
     }
 
     //удаляем кэш
@@ -247,8 +360,10 @@ class BuilderBikeland extends BuilderParser{
  	//Наследуем абстрактный  метод по созданию товара
  	public function buildProduct(){
  		//по ссылкам с пагинации заносим html и название товара в базу
-		$this->getInfoCacheProducts();
- 
+		//$this->getInfoCacheProducts();
+ 	
+ 		//получаем данные с базы, парсим и заносим всю инфу для создания товара
+ 		$this->setProductInfo();
  		
  		return true;
  	}
@@ -345,29 +460,18 @@ class BuilderBikeland extends BuilderParser{
 	}
 
 	//в базу заносим ссылки на список товара категории (ссылки пагинации) 
-	public function setPaginationInfo($parent_id = false, $category_id = false, $url = false){
+	public function setPaginationInfo(){
 
 		//с базы получаем данные id родительской категории и ссылку на дочерню категорию
 		$stmt = 'SELECT parent_id,category_id,url FROM cache_category';
 
 		$stmt = DB::run($stmt);
  
- 		//массив который будет хранить данные для товара
- 		$dat = [];
+ 		foreach($stmt as $data){
  
-  		foreach($stmt as $data){
-  			$dat[] = [
-  			'parent_id' 	=> $data['parent_id'],
-  			'category_id' 	=> $data['category_id'],
-  			 
- 			];
 	 		$this->recur($data['parent_id'],$data['category_id'],$data['url']);
  		}
-
- 		//данные для товара отправляем во временное хранилище
- 		$this->cache = $dat;
- 		 
-
+ 
  		return true;
 	}
 
@@ -442,7 +546,96 @@ class BuilderBikeland extends BuilderParser{
 	  	}
 	  	 
  		return true;
+
     }
+
+    //функция которая получает с базы кэш продукта парсит его и отправляет на добавление в базу товара
+    public function setProductInfo(){
+    			
+    			
+    			#TODO и еще нужно разобраться со всяким бредом типа размер, цвет и все подобное +  после один массив передать на добавление в базу, а второй массив передать в цыкл на скачивание картинок в папку
+ 
+
+ 		//с базы получаем данные для парсинга и добавление товара в базу
+		$stmt = 'SELECT parent_id,category_id,name,html FROM cache_products';
+ 		$stmt = DB::run($stmt);	
+ 		
+ 		//формируем массив данных с базы
+ 		$mas = [];
+ 		foreach($stmt as $data){
+ 			$mas[] = [
+ 				"parent_category_id"	=>	$data['parent_id'],
+ 				"category_id"			=>	$data['category_id'],
+ 				"name"					=>	$data['name'],
+ 				"html"					=>	$data['html'],
+
+ 			];
+ 		}
+
+ 		//формируем массив для создания товара
+ 		$products = [];
+ 		$images = [];
+  		foreach($mas as $data){
+ 			$html = str_get_html($data['html']);
+ 			$price = (!empty($html->find('.price span.price_value'))) ? 
+ 						trim($html->find('.price span.price_value')[0]->plaintext) : 0;
+ 			$article = (!empty($html->find('.article span.value'))) ? 
+ 						trim($html->find('.article span.value',0)->plaintext) : "";
+
+ 			$desc = (!empty($html->find('.tabs-body .detail_text'))) ? 
+ 						trim($html->find('.tabs-body .detail_text')[0]->plaintext) : "";
+
+ 			$characts = (!empty($html->find('.tabs_content .props_list',0))) ? 
+ 						trim($html->find('.tabs_content .props_list',0)->innertext) : "";
+
+ 			$charact = "<table><tbody>".$characts."</table></tbody>";
+ 			$filename = (!empty($html->find('.item_slider ul.slides a'))) ? $html->find('.item_slider ul.slides a') : "";												
+
+ 			$products[] = [
+ 			"parent_category_id"	=>	$data['parent_category_id'],
+ 			"category_id"			=>	$data['category_id'],
+ 			"name"					=>	trim($data['name']),
+ 			"price"					=>  str_replace(" ","",$price),
+ 			"sku"					=>	$article,
+ 			"desc"					=>	$desc,
+ 			"charact"				=>	(!empty($characts)) ? $charact : "",
+ 			"image"					=>	$filename,
+ 			];
+
+ 			//получаем ссылку на картинку(для загрузки) и имя картинки
+ 			foreach ($filename as $a){
+ 				$images[] = [
+ 				"name" 	=> $this->_parser->setImageName($this->home,$a->href),
+ 				"url" 	=> $this->home.$a->href,
+ 				];
+ 			}
+ 		}
+
+ 		//создаем товар
+ 		$this->_parser->createProduct($products);
+
+ 		/*
+ 
+ 
+		#TODO создать функцию по скачиванию картинок + надо разобраться что такое object_id
+
+		$path_parts = pathinfo('https://bikeland.ru/upload/iblock/cbe/cbe0e7514a62f79033a13e80889fc272.jpg');
+ 
+		echo $path_parts['extension'], "\n";
+		echo $path_parts['filename'], "\n"; // начиная с PHP 5.2.0
+		*/
+
+
+ 		
+
+ 		 //var_dump($products);	
+
+
+    }
+
+    
+
+
  
  
 
