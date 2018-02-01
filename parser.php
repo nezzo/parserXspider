@@ -2,11 +2,7 @@
 require 'simple_html_dom.php';
 require 'sql.php';
 
-#TODO в результате по идее должно выйти все в один итог это занести данные в базу дотплант
-
-#TODO проверить еще раз вроде с категориями все, нужно дальше добивать пагинацию, но это не точно, нужно еще раз сверить все ли по категориям сделано
-
-
+#TODO возможно эту прогу запускать только из консоли, что бы не создавала такой большой нагрузки
 
 
 //подключаем Builder
@@ -42,15 +38,15 @@ class Parser{
 
 	//создаем категории в базе, если передан параметр(parent_id то это дочерняя и заносим тогда ее в кэш. Параметры: $name,$parent_id = false, $url = false
 	public function setCategoryInfo($mas){
-	 	
-	 	$dat = [];
+
+		$dat = [];
 	 	foreach ($mas as $data){
 
 	 	  //делаем проверку, что бы категория была с именем
 		  if(!empty($data['name'])){
 
 		    $category_group_id = 1;
-		    $parent_id = (!empty($data['parent_id'])) ? $data['parent_id'] : 1;
+		    $parent_id = (!empty($data['id'])) ? $data['id'] : 1;
 		    $name = htmlentities($data['name']);
 		    $nonDataStr = "";
 		    $nonDataInt = 0;
@@ -58,6 +54,7 @@ class Parser{
 		    $slug = $this->generate_chpu($data['name']);
 		    $active = 1;
 		    $url = (!empty($data['url'])) ? $data['url'] : false;
+		    $parent_url = (!empty($data['parent_url'])) ? $data['parent_url'] : false;
  			
  			/*Заносим введеные данные в базу*/
 		    $setCategory = DB::prepare("INSERT INTO category 
@@ -99,8 +96,8 @@ class Parser{
 		      	}
 
 		      	$dat [] = [
-		      		'parent_id' 	=> $lastID,
-		      		'url'			=>	$url,			
+		      		'id' 	=> $lastID,
+		      		'parent_url'	=> $parent_url,			
 		      	];
 		  	}
 
@@ -108,6 +105,43 @@ class Parser{
 
  		return $dat;
  	}
+
+ 	//заносим в базу ссылки на пагинацию
+ 	public function setPaginationUrl($parent_id,$category_id,$url){
+
+ 		if(!empty($parent_id) && !empty($category_id) && !empty($url)){
+	 		/*Заносим введеные данные в базу*/
+			$setPagination = DB::prepare("INSERT INTO cache_pagination 
+			                            (parent_id,category_id, url) 
+			                              VALUES (:parent_id, :category_id, :url)");
+			$setPagination->bindParam(':parent_id', $parent_id);
+			$setPagination->bindParam(':category_id', $category_id);
+			$setPagination->bindParam(':url', $url);
+			$setPagination->execute();
+		}
+ 	}
+
+ 	//подготовленные данные заносим в кэш продутка
+ 	public function setCacheHtmlProducts($data){
+
+ 		if(!empty($data)){
+ 			foreach($data as $dat){
+ 				$setPagination = DB::prepare("INSERT INTO cache_products 
+	                            (parent_id,category_id, name, html) 
+	                              VALUES (:parent_id, :category_id, :name, :html)");
+			 	$setPagination->bindParam(':parent_id', $dat['parent_id']);
+			 	$setPagination->bindParam(':category_id', $dat['category_id']);
+			    $setPagination->bindParam(':name', $dat['name']);
+			    $setPagination->bindParam(':html', $dat['html']);
+			    $setPagination->execute();
+ 			}
+ 		}
+
+ 		return true;
+ 			
+ 	}
+				
+				
 
 	//генерирует ЧПУ
 	public function generate_chpu($str){
@@ -142,6 +176,18 @@ class Parser{
 	    $str = trim($str, "-");
 	    return $str;
     }
+
+    //удаляем кэш
+	public function clearCache(){
+ 		$clearCache_category = "DELETE FROM  cache_category";
+	 	DB::run($clearCache_category);
+	 		 
+	   	$clearCache_pagination = "DELETE FROM cache_pagination";
+	 	DB::run($clearCache_pagination);
+
+	 	$clearCache_products = "DELETE FROM cache_products";
+	 	DB::run($clearCache_products);
+  	}
  
 }
 
@@ -169,7 +215,10 @@ class BuilderBikeland extends BuilderParser{
 	//главная страница
 	public $home = "https://bikeland.ru";
 
+	//Наследуем абстрактный  метод по созданию категорий
 	public function buildCategory(){
+
+		/*
 
 		//получаем родиельские категории на главной странице
 		$this->getParentsCategoryBikeland();
@@ -177,19 +226,44 @@ class BuilderBikeland extends BuilderParser{
 		//добавляем дочерние категории в базу
 		$this->setDaughterCategoryBikeland();
 
-	}
+		//получаем дочерние категории для создания пагинации
+		$this->getDaughterCategoryBikeland();
 
+		*/
+		return true;
+ 	}
+
+ 	//Наследуем абстрактный  метод по созданию ссылок пагинации
+ 	public function buildPagination(){
+
+ 		/*
+ 		//создаем ссылки на пагинации в дочерних категориях
+ 		$this->setPaginationInfo();
+ 		*/
+
+ 		return true;
+ 	}
+
+ 	//Наследуем абстрактный  метод по созданию товара
+ 	public function buildProduct(){
+ 		//по ссылкам с пагинации заносим html и название товара в базу
+		$this->getInfoCacheProducts();
+ 
+ 		
+ 		return true;
+ 	}
+ 
 	//добавляем родительские категории в базу
 	public function getParentsCategoryBikeland(){
  	  $html = str_get_html($this->_parser->curl_get($this->home));
 	  $data = [];
 	 
-	  if($html->innertext!='' and count($html->find('.catalogfirst a.icons_fa'))){
+	  if($html->innertext!='' and !empty($html->find('.catalogfirst a.icons_fa'))){
 	    foreach($html->find('.catalogfirst a.icons_fa') as $a){
 	    	$data[] = [
-	    		'name'	=>	$a->plaintext,
-	    		'url'	=>	$this->home.$a->href,
-	    	];
+	    		'name'			=>	$a->plaintext,
+	    		'parent_url'	=>	$this->home.$a->href,
+ 	    	];
  		}
 	  }
  	  
@@ -204,44 +278,176 @@ class BuilderBikeland extends BuilderParser{
  	}
 
 
-	//заносим в базу дочерние категории $parents_id, $url
+	//заносим в базу дочерние категории $parents_id, $parent_url
 	public function setDaughterCategoryBikeland(){
- 		
+ 	  
  	  $mas = $this->cache;
  	  unset($this->cache);
 
  	  $dat = [];
  	  foreach($mas as $data){
- 	  	$html = str_get_html($this->_parser->curl_get($data['url']));
-
- 			if(!empty($data['parent_id'])){
+ 	  	if(!empty($data['id'])){
+ 				$html = str_get_html($this->_parser->curl_get($data['parent_url']));
  				//проверяем существует ли дочерние категории на странице
-		        if($html->innertext!='' and count($html->find('.catalog_section_list .section_info li.name a'))){
+		        if($html->innertext!='' and !empty($html->find('.catalog_section_list .section_info li.name a'))){
 				    foreach($html->find('.catalog_section_list .section_info li.name a') as $a){
 				         $dat[] = [
-				         	'parent_id'	=>	$data['parent_id'],
+				         	'id'		=>	$data['id'],
 				         	'name'		=>	$a->plaintext,
 				         	'url'		=>	$this->home.$a->href,
 
 				         ];
-				    }
+ 					}
 
 			      	//подчищаем за собой
 				  	$html->clear();
 				  	unset($html);
+		 		}else{
+		 			break;
 		 		}
  			}
 	  	}
 
-	  	$setDaughterCategory = (!empty($dat)) ? $dat : false;
-
-	  	//заносим дочерние категории в базу
-	  	return $this->_parser->setCategoryInfo($setDaughterCategory);
+	  	if(!empty($dat)){
+	  		$this->_parser->setCategoryInfo($dat);
+	  	}else{
+	  		return false;
+	  	}
+		
+ 
  	}
 
-	
+ 	//проверяем существуют ли категории в дочерних категориях
+	public function getDaughterCategoryBikeland(){
 
-	
+		//с базы получаем данные id родительской категории и ссылку на дочерню категорию
+		$stmt = 'SELECT category_id,url FROM cache_category';
+
+		$stmt = DB::run($stmt);
+
+		//в этот массив заносим category_id,url
+ 		$dauth = [];
+
+		foreach($stmt as $data){
+		 
+			//заносим в переменную инфу о том есть ли дочерние категории в текущей категории
+			$dauth[] = [
+ 				'id'			=>	$data['category_id'],
+				'parent_url'	=>	$data['url'],
+			];
+ 		}
+
+ 		//данные которые получили с базы отправляем повторно для того что бы опеределить если ли еще дочерние категории
+ 		$this->cache = $dauth;
+ 		$this->setDaughterCategoryBikeland();
+
+  		return true;
+	}
+
+	//в базу заносим ссылки на список товара категории (ссылки пагинации) 
+	public function setPaginationInfo($parent_id = false, $category_id = false, $url = false){
+
+		//с базы получаем данные id родительской категории и ссылку на дочерню категорию
+		$stmt = 'SELECT parent_id,category_id,url FROM cache_category';
+
+		$stmt = DB::run($stmt);
+ 
+ 		//массив который будет хранить данные для товара
+ 		$dat = [];
+ 
+  		foreach($stmt as $data){
+  			$dat[] = [
+  			'parent_id' 	=> $data['parent_id'],
+  			'category_id' 	=> $data['category_id'],
+  			 
+ 			];
+	 		$this->recur($data['parent_id'],$data['category_id'],$data['url']);
+ 		}
+
+ 		//данные для товара отправляем во временное хранилище
+ 		$this->cache = $dat;
+ 		 
+
+ 		return true;
+	}
+
+	//рекурсия (заносим ссылки на каждую страницу пагинации категории)
+	public function recur($parent_id,$category_id,$url){
+		//делаем проверку данных, что бы не были пустыми
+		if(!empty($url)){
+			$html = str_get_html($this->_parser->curl_get($url));
+	 		$n = $html->find('.flex-nav-next  a');
+			$prev = $html->find('.flex-nav-prev  a');
+			$next = $this->home.$n[0]->href;
+
+			$html->clear();
+	  		unset($html);
+
+			//начиная с первой страницы заносим ее в базу
+			if(empty($prev)){
+				/*Заносим введеные данные в базу*/
+				$this->_parser->setPaginationUrl($parent_id,$category_id,$url);
+	 		}
+
+			//если находим ссылку в пагинации на слудющую страницу то заносим ее в базу
+			if(!empty($n)){
+
+				/*Заносим введеные данные в базу*/
+				$this->_parser->setPaginationUrl($parent_id,$category_id,$next);
+
+				//и так делаем в рекурсии пока есть ссылки в пагинации next    
+	  			$this->recur($parent_id,$category_id,$next);
+	 		}else{
+
+				return true;
+			}
+	    }
+	}
+
+	//получаем с базы всю нужную информацию для создания кэша продутка
+	public function getInfoCacheProducts(){
+
+		//с базы получаем данные id родительской категории, id дочерний категори, url
+		$stmt = 'SELECT parent_id,category_id,url FROM cache_pagination';
+
+		$stmt = DB::run($stmt);
+		$cache_productsInfo = [];
+		$mas = [];
+
+
+		//формируем массив для получения ссылки на каждый товар
+		foreach($stmt as $d){
+		$html = str_get_html($this->_parser->curl_get($d['url']));
+			if($html->innertext!='' and !empty($html->find('.item-title a'))){
+			    foreach($html->find('.item-title a') as $a){
+			    	$cache_productsInfo[] = [
+			    		'name'			=> htmlentities($a->plaintext),
+			    		'html'			=> $this->_parser->curl_get($this->home.$a->href),
+			    		'parent_id' 	=> $d['parent_id'],
+	  					'category_id' 	=> $d['category_id'],
+			    	];
+			    }
+			}
+	  	}
+	   
+
+	  	$html->clear();
+	  	unset($html);
+ 
+	  	//проверяем создался ли массив
+	  	if(!empty($cache_productsInfo)){
+	  		 $this->_parser->setCacheHtmlProducts($cache_productsInfo);
+	  	}else{
+	  		return false;
+	  	}
+	  	 
+ 		return true;
+    }
+ 
+ 
+
+
+
 
 
 
@@ -252,11 +458,12 @@ class BuilderBikeland extends BuilderParser{
 /*END CLASS*/
 }
 
-
+/*
 class BuilderDrivebike extends BuilderParser{
 
 	
 }
+*/
 
 class Chooser{
   	private $_builderParser;
