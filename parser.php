@@ -24,13 +24,18 @@ class Parser{
 	}
 
 	public function curl_get($url = "", $referer = 'http://www.google.com') {
+	 $headers = array("Accept-Language:ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7","Cache-Control: no-cache","Pragma: no-cache");
 	  $ch = curl_init();
 	  curl_setopt($ch, CURLOPT_URL, $url);
 	  curl_setopt($ch, CURLOPT_HEADER, 0);
-	  curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; WOW64; ry: 38.0) Gecko/20100101 Firefox/38.0");
+	  curl_setopt($ch, CURLOPT_HTTPHEADER,$headers);
+	  curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.119 Safari/537.36");
 	  curl_setopt($ch, CURLOPT_REFERER, $referer);
-	  curl_setopt ($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
-	  curl_setopt ($ch, CURLOPT_RETURNTRANSFER, TRUE);
+	  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+	  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+	  curl_setopt($ch, CURLOPT_COOKIEFILE, "cookiefile"); 
+	  curl_setopt($ch, CURLOPT_COOKIEJAR, "cookiefile"); # SAME cookiefile
+	  curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); 
 	  $data = curl_exec($ch);
 	  curl_close($ch);
 	  return $data;
@@ -220,7 +225,7 @@ class Parser{
  
  				    //если есть данные о картинках в товаре то заносим эту инфу в базу
  				    if(!empty($images)){
-			 			$object_id = 1; #TODO надо будет узнать, что это поле означает
+			 			$object_id = 3; //table object id 3 Product
 			 			foreach($images as $image){
  			 				$filename = $this->setImageName("https://bikeland.ru",$image->href);
  							
@@ -290,6 +295,38 @@ class Parser{
     	}
     }
 
+
+    //функция по скачиванию картинок
+    public function downloadImage($mas){
+    	if(!empty($mas)){
+    		$data_image = [];
+
+	    	$ch = curl_init();
+			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);  
+			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+  			curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+			curl_setopt($ch, CURLOPT_HEADER, 0);
+
+			foreach($mas as $image){
+				curl_setopt($ch, CURLOPT_URL,$image['url']);
+				$response = curl_exec($ch);
+				//проверяем нету ли ошибок на стороне сервера, если нету то загружаем картинку
+				if(!empty($response)){
+					$data_image[] = [
+					'name_image'    => 'images/'.$image['name'],
+					'response'      =>  $response,
+					];
+				} 
+			}
+			curl_close($ch);
+			//запускаем цикл по скачиванию картинок
+			foreach($data_image as $img){
+				file_put_contents($img['name_image'], $img['response']); 
+			}
+		}						
+ 	}
+
+
     //удаляем кэш
 	public function clearCache(){
  		$clearCache_category = "DELETE FROM  cache_category";
@@ -330,37 +367,39 @@ class BuilderBikeland extends BuilderParser{
 
 	//Наследуем абстрактный  метод по созданию категорий
 	public function buildCategory(){
-
-		/*
+		echo "Category Start!"."\n";
 
 		//получаем родиельские категории на главной странице
-		$this->getParentsCategoryBikeland();
+		//$this->getParentsCategoryBikeland();
 
 		//добавляем дочерние категории в базу
-		$this->setDaughterCategoryBikeland();
+		//$this->setDaughterCategoryBikeland();
 
 		//получаем дочерние категории для создания пагинации
-		$this->getDaughterCategoryBikeland();
+		//$this->getDaughterCategoryBikeland();
 
-		*/
+		 
 		return true;
  	}
 
  	//Наследуем абстрактный  метод по созданию ссылок пагинации
  	public function buildPagination(){
-
- 		/*
+ 		echo "Pagination Start!"."\n";
+ 		 
  		//создаем ссылки на пагинации в дочерних категориях
- 		$this->setPaginationInfo();
- 		*/
+ 		//$this->setPaginationInfo();
+ 		 
 
  		return true;
  	}
 
  	//Наследуем абстрактный  метод по созданию товара
  	public function buildProduct(){
+
+ 		echo "Product Start!"."\n";
+
  		//по ссылкам с пагинации заносим html и название товара в базу
-		//$this->getInfoCacheProducts();
+		$this->getInfoCacheProducts(0);
  	
  		//получаем данные с базы, парсим и заносим всю инфу для создания товара
  		$this->setProductInfo();
@@ -469,7 +508,7 @@ class BuilderBikeland extends BuilderParser{
  
  		foreach($stmt as $data){
  
-	 		$this->recur($data['parent_id'],$data['category_id'],$data['url']);
+ 			$this->recur($data['parent_id'],$data['category_id'],$data['url']);
  		}
  
  		return true;
@@ -477,75 +516,104 @@ class BuilderBikeland extends BuilderParser{
 
 	//рекурсия (заносим ссылки на каждую страницу пагинации категории)
 	public function recur($parent_id,$category_id,$url){
-		//делаем проверку данных, что бы не были пустыми
+	
+ 		//делаем проверку данных, что бы не были пустыми
 		if(!empty($url)){
 			$html = str_get_html($this->_parser->curl_get($url));
-	 		$n = $html->find('.flex-nav-next  a');
-			$prev = $html->find('.flex-nav-prev  a');
-			$next = $this->home.$n[0]->href;
+ 			$prev = $html->find('.flex-nav-prev  a');
+ 			$countNumberPage = count($html->find('.nums  a'));
+ 			$numberPage = $html->find('.nums  a');
+  
+ 			//сколько страниц в пагинации скольки итераций сделает цикл 
+			switch($countNumberPage){
+			 
+			    case 2:
+			        $countPages = $numberPage[1]->plaintext;
+			        break;
+			    case 3:
+			        $countPages = $numberPage[2]->plaintext;
+			        break;
+
+			    case 4:
+			        $countPages = $numberPage[3]->plaintext;
+			        break;  
+			}
 
 			$html->clear();
 	  		unset($html);
 
-			//начиная с первой страницы заносим ее в базу
+
+ 			//начиная с первой страницы заносим ее в базу
 			if(empty($prev)){
 				/*Заносим введеные данные в базу*/
 				$this->_parser->setPaginationUrl($parent_id,$category_id,$url);
 	 		}
 
 			//если находим ссылку в пагинации на слудющую страницу то заносим ее в базу
-			if(!empty($n)){
+			if(!empty($countPages)){
 
-				/*Заносим введеные данные в базу*/
-				$this->_parser->setPaginationUrl($parent_id,$category_id,$next);
+				for($i = 2; $i<=$countPages; $i++){
+					/*Заносим введеные данные в базу*/
+					$this->_parser->setPaginationUrl($parent_id,$category_id,$url."?PAGEN_1=".$i);
+				}
 
-				//и так делаем в рекурсии пока есть ссылки в пагинации next    
-	  			$this->recur($parent_id,$category_id,$next);
-	 		}else{
+			}else{
 
-				return true;
+				return false;
 			}
-	    }
+ 		}
+
+ 		return true;
 	}
 
 	//получаем с базы всю нужную информацию для создания кэша продутка
-	public function getInfoCacheProducts(){
+	public function getInfoCacheProducts($offset = false){
 
-		//с базы получаем данные id родительской категории, id дочерний категори, url
-		$stmt = 'SELECT parent_id,category_id,url FROM cache_pagination';
+		//запуск рекурсии
+		if(!empty($offset) || $offset===0){
 
-		$stmt = DB::run($stmt);
-		$cache_productsInfo = [];
-		$mas = [];
+			//с базы получаем данные id родительской категории, id дочерний категори, url
+			$stmt = "SELECT id,parent_id,category_id,url FROM cache_pagination LIMIT 1 OFFSET $offset";
 
-
-		//формируем массив для получения ссылки на каждый товар
-		foreach($stmt as $d){
-		$html = str_get_html($this->_parser->curl_get($d['url']));
-			if($html->innertext!='' and !empty($html->find('.item-title a'))){
-			    foreach($html->find('.item-title a') as $a){
-			    	$cache_productsInfo[] = [
-			    		'name'			=> htmlentities($a->plaintext),
-			    		'html'			=> $this->_parser->curl_get($this->home.$a->href),
-			    		'parent_id' 	=> $d['parent_id'],
-	  					'category_id' 	=> $d['category_id'],
-			    	];
-			    }
-			}
-	  	}
-	   
-
-	  	$html->clear();
-	  	unset($html);
+			$stmt = DB::run($stmt);
+			$cache_productsInfo = [];
  
-	  	//проверяем создался ли массив
-	  	if(!empty($cache_productsInfo)){
-	  		 $this->_parser->setCacheHtmlProducts($cache_productsInfo);
-	  	}else{
-	  		return false;
-	  	}
-	  	 
- 		return true;
+
+			//формируем массив для получения ссылки на каждый товар
+			 
+			foreach($stmt as $d){
+ 					$html = str_get_html($this->_parser->curl_get($d['url']));
+					if($html->innertext!='' and !empty($html->find('.item-title a'))){
+					    foreach($html->find('.item-title a') as $a){
+					    	$cache_productsInfo[] = [
+					    		'name'			=> htmlentities($a->plaintext),
+					    		'html'			=> $this->_parser->curl_get($this->home.$a->href),
+					    		'parent_id' 	=> $d['parent_id'],
+			  					'category_id' 	=> $d['category_id'],
+					    	];
+					    }
+					}
+
+					echo $d['id']."\n";
+  			}
+		  	
+			    $html->clear();
+			  	unset($html);
+
+			  	
+		 
+			  	//проверяем создался ли массив
+			  	if(!empty($cache_productsInfo)){
+			  		 $this->_parser->setCacheHtmlProducts($cache_productsInfo);
+			  		 $this->getInfoCacheProducts($offset+1);
+ 				}else{
+			  		return false;
+			  	}
+		  	 
+		 		return true;
+		 	}else{
+		 		return false;
+ 			}
 
     }
 
@@ -553,7 +621,7 @@ class BuilderBikeland extends BuilderParser{
     public function setProductInfo(){
     			
     			
-    			#TODO и еще нужно разобраться со всяким бредом типа размер, цвет и все подобное +  после один массив передать на добавление в базу, а второй массив передать в цыкл на скачивание картинок в папку
+    #TODO и еще нужно разобраться со всяким бредом типа размер, цвет и все подобное 
  
 
  		//с базы получаем данные для парсинга и добавление товара в базу
@@ -613,25 +681,16 @@ class BuilderBikeland extends BuilderParser{
 
  		//создаем товар
  		$this->_parser->createProduct($products);
-
- 		/*
  
+
+ 		//скачиваем картинки
+		$this->_parser->downloadImage($images);
  
-		#TODO создать функцию по скачиванию картинок + надо разобраться что такое object_id
-
-		$path_parts = pathinfo('https://bikeland.ru/upload/iblock/cbe/cbe0e7514a62f79033a13e80889fc272.jpg');
- 
-		echo $path_parts['extension'], "\n";
-		echo $path_parts['filename'], "\n"; // начиная с PHP 5.2.0
-		*/
-
-
- 		
-
- 		 //var_dump($products);	
 
 
     }
+
+    
 
     
 
@@ -676,3 +735,12 @@ class Chooser{
          $this->_builderParser->buildProduct();
   	}
 }
+
+#TODO сделать так то бы перед запуском  парсера нового сайта, после старого парсинга делалась очистка кэша, что бы база была готовая (чистая) перед новым сайтом для парсинга
+
+$start = new Chooser();
+$bikeland = new BuilderBikeland();
+//$drivebike = new BuilderDrivebike();
+$start->setBuilderParser($bikeland);
+$start->constructParser();
+$realPhone = $start->getParserData();

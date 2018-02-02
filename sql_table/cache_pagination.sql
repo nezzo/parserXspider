@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Хост: localhost
--- Время создания: Янв 28 2018 г., 23:08
+-- Время создания: Фев 02 2018 г., 13:42
 -- Версия сервера: 5.7.21-0ubuntu0.16.04.1
 -- Версия PHP: 7.0.22-0ubuntu0.16.04.1
 
@@ -28,6 +28,7 @@ SET time_zone = "+00:00";
 
 CREATE TABLE `cache_pagination` (
   `id` int(255) NOT NULL,
+  `parent_id` int(255) NOT NULL,
   `category_id` varchar(255) CHARACTER SET utf8 NOT NULL,
   `url` varchar(255) CHARACTER SET utf8 NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
@@ -50,7 +51,7 @@ ALTER TABLE `cache_pagination`
 -- AUTO_INCREMENT для таблицы `cache_pagination`
 --
 ALTER TABLE `cache_pagination`
-  MODIFY `id` int(255) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=693;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Хост: localhost
--- Время создания: Фев 02 2018 г., 13:42
+-- Время создания: Фев 02 2018 г., 13:43
 -- Версия сервера: 5.7.21-0ubuntu0.16.04.1
 -- Версия PHP: 7.0.22-0ubuntu0.16.04.1
 
@@ -23,14 +23,15 @@ SET time_zone = "+00:00";
 -- --------------------------------------------------------
 
 --
--- Структура таблицы `cache_category`
+-- Структура таблицы `cache_products`
 --
 
-CREATE TABLE `cache_category` (
+CREATE TABLE `cache_products` (
   `id` int(255) NOT NULL,
   `parent_id` int(255) NOT NULL,
   `category_id` int(255) NOT NULL,
-  `url` varchar(255) CHARACTER SET utf8 NOT NULL
+  `name` varchar(255) CHARACTER SET utf8 NOT NULL,
+  `html` longtext CHARACTER SET utf8 NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 --
@@ -38,9 +39,9 @@ CREATE TABLE `cache_category` (
 --
 
 --
--- Индексы таблицы `cache_category`
+-- Индексы таблицы `cache_products`
 --
-ALTER TABLE `cache_category`
+ALTER TABLE `cache_products`
   ADD PRIMARY KEY (`id`);
 
 --
@@ -48,10 +49,10 @@ ALTER TABLE `cache_category`
 --
 
 --
--- AUTO_INCREMENT для таблицы `cache_category`
+-- AUTO_INCREMENT для таблицы `cache_products`
 --
-ALTER TABLE `cache_category`
-  MODIFY `id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1210;
+ALTER TABLE `cache_products`
+  MODIFY `id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=57;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

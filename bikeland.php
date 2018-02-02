@@ -25,6 +25,33 @@ function curl_get($url = "", $referer = 'http://www.google.com') {
 
 #TODO данный скрипт идет как черновик и не стоит его пока оптимизировать, но вот что я думаю насчет пагинации. Может сохранять тоже html (возле ссылки) и распарсивать находу и заносить товар и ссылку (в пагинацию на следующую страницу) и html код заносить на следующую страницу и дальше так парсить, возможно нагрузка не будет такой большой
  
+/* в списке товара получаем последнюю страницу пагинации(если поставить 5 то только когда не на первой странице)
+
+$html = str_get_html(curl_get("https://bikeland.ru/mototekhnika/motorcycles/"));
+$n = count($html->find('.nums  a')); 
+$s = $html->find('.nums  a');
+
+switch($n){
+ 
+    case 2:
+        $a = $s[1]->plaintext;
+        break;
+    case 3:
+        $a = $s[2]->plaintext;
+        break;
+
+    case 4:
+        $a = $s[3]->plaintext;
+        break;  
+}
+$html->clear();
+        unset($html);
+  var_dump($a);
+ //var_dump($s[2]->plaintext);
+ */
+
+
+
 //запуск парсинга
 //start();
 
