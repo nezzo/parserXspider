@@ -50,6 +50,30 @@ $html->clear();
  //var_dump($s[2]->plaintext);
  */
 
+$dat = [];
+$dats = [];
+  $html = str_get_html(curl_get("https://bikeland.ru/directory/tyuning_i_aksessuary/"));
+         //проверяем существует ли дочерние категории на странице
+            if($html->innertext!='' and !empty($html->find('.catalog_section_list .section_info li.name a'))){
+
+            foreach($html->find('.catalog_section_list .section_info li.name a') as $a){
+                $dat[] = [
+                  $html->find('.catalog_section_list .section_info li.name a'),
+                'id'    =>  time(),
+               ];
+            }
+          }
+
+          foreach($dat as $a){
+            $dats[] = [
+                  'id'    =>  $dat['id'],
+                  'name'    =>  $a->plaintext,
+                  'url'   =>  $a->href,
+
+                 ];
+          }
+
+var_dump($dats);
 
 
 //запуск парсинга
