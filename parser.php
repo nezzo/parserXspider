@@ -165,7 +165,18 @@ class Parser{
  				$date_time = date("Y-m-d H:i:s");
  				$sku = (!empty($data['sku'])) ? $data['sku'] : "";
  				$images = (!empty($data['image'])) ? $data['image'] : "";
- 				$slug = $this->generate_chpu($name);
+
+ 				//делаем проверку если символов больше 70 то обрезаем (в базе можно хранить до 80)
+ 				$count_slug_symbol = mb_strlen($name);
+ 				if($count_slug_symbol >= 70){
+   					$name_count_symbol = substr($name, 0,70);
+ 					$slug = $this->generate_chpu($name_count_symbol);
+
+ 				}else{
+ 					$slug = $this->generate_chpu($name);
+ 				}
+
+ 				 
  
  				//заносим данные в таблицу product
  				$setCreateProduct = DB::prepare("INSERT INTO product 
@@ -368,10 +379,10 @@ class BuilderBikeland extends BuilderParser{
 		echo "Category Start!"."\n";
 
 		//получаем родиельские категории на главной странице
-		$this->getParentsCategoryBikeland();
+		//$this->getParentsCategoryBikeland();
 
 		//добавляем дочерние категории в базу
-		$this->setDaughterCategoryBikeland();
+		//$this->setDaughterCategoryBikeland();
 
 		//получаем дочерние категории для создания пагинации
 		//$this->getDaughterCategoryBikeland();
@@ -385,7 +396,7 @@ class BuilderBikeland extends BuilderParser{
  		echo "Pagination Start!"."\n";
  		 
  		//создаем ссылки на пагинации в дочерних категориях
- 		$this->setPaginationInfo();
+ 		//$this->setPaginationInfo();
  		 
 
  		return true;
@@ -397,10 +408,10 @@ class BuilderBikeland extends BuilderParser{
  		echo "Product Start!"."\n";
 
  		//по ссылкам с пагинации заносим html и название товара в базу
-		$this->getInfoCacheProducts();
+		//$this->getInfoCacheProducts();
  	
  		//получаем данные с базы, парсим и заносим всю инфу для создания товара
- 		$this->setProductInfo();
+ 		//$this->setProductInfo();
  		
  		return true;
  	}
@@ -609,10 +620,10 @@ class BuilderBikeland extends BuilderParser{
 					    		'parent_id' 	=> $d['parent_id'],
 			  					'category_id' 	=> $d['category_id'],
 					    	];
- 						}
 
- 						echo $d['id']."||".htmlentities($a->plaintext)."\n"; 
-					}
+					    	echo $d['id']."||".htmlentities($a->plaintext)."\n";
+ 						}
+ 					}
 			}
 		  	
 			    $html->clear();
@@ -637,7 +648,8 @@ class BuilderBikeland extends BuilderParser{
     #TODO и еще нужно разобраться со всяким бредом типа размер, цвет и все подобное 
  
  		//с базы получаем данные для парсинга и добавление товара в базу
-		$stmt = "SELECT id,parent_id,category_id,name,html FROM cache_products";
+		//$stmt = "SELECT id,parent_id,category_id,name,html FROM cache_products";
+    	$stmt = "SELECT id,parent_id,category_id,name,html FROM cache_products LIMIT 2420";
  		$stmt = DB::run($stmt);	
  		
  		//формируем массив данных с базы

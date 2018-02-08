@@ -49,7 +49,7 @@ $html->clear();
   var_dump($a);
  //var_dump($s[2]->plaintext);
  */
-
+/*
 $dat = [];
 $dats = [];
   $html = str_get_html(curl_get("https://bikeland.ru/directory/tyuning_i_aksessuary/"));
@@ -74,6 +74,21 @@ $dats = [];
           }
 
 var_dump($dats);
+*/
+
+
+$stmt = "SELECT html FROM cache_products WHERE id = 792";
+    $stmt = DB::run($stmt);
+
+    foreach($stmt as $data){
+       $html = str_get_html($data['html']);
+       $n = trim($html->find('.tabs-body .detail_text')[0]->plaintext);
+       }
+
+ 
+
+       var_dump($n);
+
 
 
 //запуск парсинга
